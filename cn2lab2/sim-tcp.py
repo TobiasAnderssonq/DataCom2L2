@@ -79,7 +79,7 @@ cmd = ns.core.CommandLine()
 # Default values
 cmd.latency = 1
 cmd.rate = 500000
-cmd.on_off_rate = 500000
+cmd.on_off_rate = 270000
 cmd.AddValue ("rate", "P2P data rate in bps")
 cmd.AddValue ("latency", "P2P link Latency in miliseconds")
 cmd.AddValue ("on_off_rate", "OnOffApplication data sending rate")
@@ -144,10 +144,10 @@ d3d5 = pointToPoint.Install(n3n5)
 d4d5 = pointToPoint.Install(n4n5)
 
 # Here we can introduce an error model on the bottle-neck link (from node 4 to 5)
-#em = ns.network.RateErrorModel()
-#em.SetAttribute("ErrorUnit", ns.core.StringValue("ERROR_UNIT_PACKET"))
-#em.SetAttribute("ErrorRate", ns.core.DoubleValue(0.02))
-#d4d5.Get(1).SetReceiveErrorModel(em)
+em = ns.network.RateErrorModel()
+em.SetAttribute("ErrorUnit", ns.core.StringValue("ERROR_UNIT_PACKET"))
+em.SetAttribute("ErrorRate", ns.core.DoubleValue(0.02))
+d4d5.Get(1).SetReceiveErrorModel(em)
 
 
 #######################################################################################
@@ -162,14 +162,14 @@ ns.core.Config.SetDefault("ns3::TcpSocket::SegmentSize", ns.core.UintegerValue(1
 # connections created in the simulator. If you want to simulate different TCP versions
 # at the same time, see below for how to do that.
 ns.core.Config.SetDefault("ns3::TcpL4Protocol::SocketType",
-                          ns.core.StringValue("ns3::TcpNewReno"))
+#                          ns.core.StringValue("ns3::TcpNewReno"))
 #                          ns.core.StringValue("ns3::TcpVegas"))
 #                          ns.core.StringValue("ns3::TcpVeno"))
-#                          ns.core.StringValue("ns3::TcpWestwood"))
+                          ns.core.StringValue("ns3::TcpWestwood"))
 
 # Some examples of attributes for some of the TCP versions.
-ns.core.Config.SetDefault("ns3::TcpWestwood::ProtocolType",
-                          ns.core.StringValue("WestwoodPlus"))
+#ns.core.Config.SetDefault("ns3::TcpWestwood::ProtocolType",
+#                          ns.core.StringValue("WestwoodPlus"))
 #ns.core.Config.SetDefault("ns3::TcpVegas::Beta", ns.core.UintegerValue(5))
 
 
@@ -217,6 +217,14 @@ if4if5 = address.Assign(d4d5)
 # Turn on global static routing so we can actually be routed across the network.
 ns.internet.Ipv4GlobalRoutingHelper.PopulateRoutingTables()
 
+def SetupTcpSink(dstNode):
+	# Create a TCP sink at dstNode
+  packet_sink_helper = ns.applications.PacketSinkHelper("ns3::TcpSocketFactory", 
+                          ns.network.InetSocketAddress(ns.network.Ipv4Address.GetAny(), 
+                                                       8080))
+  sink_apps = packet_sink_helper.Install(dstNode)
+  sink_apps.Start(ns.core.Seconds(2.0))
+  sink_apps.Stop(ns.core.Seconds(50.0)) 
 
 #######################################################################################
 # CREATE TCP APPLICATION AND CONNECTION
@@ -225,20 +233,14 @@ ns.internet.Ipv4GlobalRoutingHelper.PopulateRoutingTables()
 # An On-Off application alternates between on and off modes. In on mode, packets are
 # generated according to DataRate, PacketSize. In off mode, no packets are transmitted.
 def SetupTcpConnection(srcNode, dstNode, dstAddr, startTime, stopTime):
-  # Create a TCP sink at dstNode
-  packet_sink_helper = ns.applications.PacketSinkHelper("ns3::TcpSocketFactory", 
-                          ns.network.InetSocketAddress(ns.network.Ipv4Address.GetAny(), 
-                                                       8080))
-  sink_apps = packet_sink_helper.Install(dstNode)
-  sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(50.0)) 
+
 
   # Create TCP connection from srcNode to dstNode 
   on_off_tcp_helper = ns.applications.OnOffHelper("ns3::TcpSocketFactory", 
                           ns.network.Address(ns.network.InetSocketAddress(dstAddr, 8080)))
   on_off_tcp_helper.SetAttribute("DataRate",
                       ns.network.DataRateValue(ns.network.DataRate(int(cmd.on_off_rate))))
-  on_off_tcp_helper.SetAttribute("PacketSize", ns.core.UintegerValue(1450)) 
+  on_off_tcp_helper.SetAttribute("PacketSize", ns.core.UintegerValue(1500)) 
   on_off_tcp_helper.SetAttribute("OnTime",
                       ns.core.StringValue("ns3::ConstantRandomVariable[Constant=2]"))
   on_off_tcp_helper.SetAttribute("OffTime",
@@ -279,11 +281,15 @@ def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime):
   client_apps.Start(startTime)
   client_apps.Stop(stopTime) 
 
-
+SetupTcpSink(nodes.Get(2))
+SetupTcpSink(nodes.Get(3))
 SetupTcpConnection(nodes.Get(0), nodes.Get(2), if2if5.GetAddress(0),
                    ns.core.Seconds(2.0), ns.core.Seconds(40.0))
-SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
-                   ns.core.Seconds(10.0), ns.core.Seconds(20.0))
+SetupTcpConnection(nodes.Get(1), nodes.Get(3), if2if5.GetAddress(0),
+                   ns.core.Seconds(2.0), ns.core.Seconds(40.0))
+
+#SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
+#                   ns.core.Seconds(10.0), ns.core.Seconds(20.0))
 
 
 #######################################################################################
