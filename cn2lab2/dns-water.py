@@ -4,11 +4,16 @@
 #
 # Network topology
 #
-#       n0 ---+      +--- n2
+#				n8 BOTNET SINK
+#				|       
+#	BOTNET n0 ---+       +--- n2 DNS
+#              |      |
+#             n4 -- n5 --- n6 SERVFAIL
 #             |      |
-#             n4 -- n5 --- n6
-#             |      |
-#       n1 ---+      +--- n3
+#       n1 ---+      +--- n3 SINK
+#				|
+#				n7
+#
 #
 # - All links are point-to-point with data rate 500kb/s and propagation delay 2ms
 #
@@ -103,7 +108,7 @@ nodes.Create(9)
 # Set the default queue length to 5 packets (used by NetDevices)
 # The first line is for older ns3 versions and the second for new versions.
 #ns.core.Config.SetDefault("ns3::DropTailQueue::MaxPackets", ns.core.UintegerValue(5))
-ns.core.Config.SetDefault("ns3::Queue::MaxPackets", ns.core.UintegerValue(5))
+#ns.core.Config.SetDefault("ns3::Queue::MaxPackets", ns.core.UintegerValue(10))
 
 
 # To connect the point-to-point channels, we need to define NodeContainers for all the
@@ -150,15 +155,24 @@ pointToPoint.SetDeviceAttribute("DataRate",
 pointToPoint.SetChannelAttribute("Delay",
                             ns.core.TimeValue(ns.core.MilliSeconds(int(cmd.latency))))
 
+#DNSp2p = pointToPoint
+
+#DNSp2p.SetChannelAttribute("Delay",
+#                           ns.core.TimeValue(ns.core.MilliSeconds(int(10))))
+#DNSp2p.SetQueue("ns3::DropTailQueue", "MaxPackets", ns.core.StringValue("50"))
+
 # install network devices for all nodes based on point-to-point links
 d0d4 = pointToPoint.Install(n0n4)
 d1d4 = pointToPoint.Install(n1n4)
 d2d5 = pointToPoint.Install(n2n5)
-d3d5 = pointToPoint.Install(n3n5)
+
 d4d5 = pointToPoint.Install(n4n5)
 d6d5 = pointToPoint.Install(n6n5)
 d7d1 = pointToPoint.Install(n7n1)
 d8d0 = pointToPoint.Install(n8n0)
+
+
+d3d5 = pointToPoint.Install(n3n5)
 
 # Here we can introduce an error model on the bottle-neck link (from node 4 to 5)
 #em = ns.network.RateErrorModel()
@@ -248,20 +262,21 @@ def SetupUdpSink(dstNode):
   packet_sink_helper = ns.applications.PacketSinkHelper("ns3::UdpSocketFactory", 
                           ns.network.InetSocketAddress(ns.network.Ipv4Address.GetAny(), 
                                                        8080))
+#  packet_sink_helper.SetAttribute("MaxBytes", ns.core.UintegerValue(200))
   sink_apps = packet_sink_helper.Install(dstNode)
   sink_apps.Start(ns.core.Seconds(2.0))
   sink_apps.Stop(ns.core.Seconds(80.0)) 
 
 
 
-def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime):
+def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RATE, PACKET_SIZE):
 
   # Create TCP connection from srcNode to dstNode 
   on_off_udp_helper = ns.applications.OnOffHelper("ns3::UdpSocketFactory", 
                           ns.network.Address(ns.network.InetSocketAddress(dstAddr, 8080)))
   on_off_udp_helper.SetAttribute("DataRate",
-                      ns.network.DataRateValue(ns.network.DataRate(int(cmd.on_off_rate))))
-  on_off_udp_helper.SetAttribute("PacketSize", ns.core.UintegerValue(1470)) 
+                      ns.network.DataRateValue(ns.network.DataRate(int(ON_OFF_RATE))))
+  on_off_udp_helper.SetAttribute("PacketSize", ns.core.UintegerValue(PACKET_SIZE)) 
   on_off_udp_helper.SetAttribute("OnTime",
                       ns.core.StringValue("ns3::ConstantRandomVariable[Constant=2]"))
   on_off_udp_helper.SetAttribute("OffTime",
@@ -280,19 +295,19 @@ SetupUdpSink(nodes.Get(8))
 
 #SET UP BOTNET REQUEST CONNECTION
 SetupUdpConnection(nodes.Get(0), nodes.Get(3), if3if5.GetAddress(0),
-                   ns.core.Seconds(20.0), ns.core.Seconds(40.0))
+                   ns.core.Seconds(10.0), ns.core.Seconds(30.0), 100000, 26)
 
 #SET UP SERVFAIL RESPONSE CONNECTION
 SetupUdpConnection(nodes.Get(6), nodes.Get(8), if8if0.GetAddress(0),
-                   ns.core.Seconds(20.0), ns.core.Seconds(40.0))
+                   ns.core.Seconds(10.0), ns.core.Seconds(30.0), 177000, 46)
 
 # SET UP NORMAL DNS REQUEST CONNECTION
 SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
-                   ns.core.Seconds(2.0), ns.core.Seconds(80.0))
+                   ns.core.Seconds(2.0), ns.core.Seconds(80.0), 10000, 26)
 
 #SET UP NORMAL RESPONSE CONNECTION
 SetupUdpConnection(nodes.Get(2), nodes.Get(7), if7if1.GetAddress(0),
-                   ns.core.Seconds(2.0), ns.core.Seconds(80.0))
+                   ns.core.Seconds(2.0), ns.core.Seconds(80.0), 200000, 512)
 
 
 
@@ -312,6 +327,7 @@ pointToPoint.EnablePcap("Botnet-traffic", d0d4.Get(0), True)
 pointToPoint.EnablePcap("Dns-ReqAndResp-traffic", d1d4.Get(0), True)
 pointToPoint.EnablePcap("Dns-Real-Resp-traffic", d7d1.Get(0), True)
 pointToPoint.EnablePcap("Dns-Botnet-Resp-traffic", d8d0.Get(0), True)
+pointToPoint.EnablePcap("Dns-sink-traffic", d3d5.Get(0), True)
 
 
 #######################################################################################
