@@ -4,15 +4,15 @@
 #
 # Network topology
 #
-#				n8 BOTNET SINK
-#				|       
-#	BOTNET n0 ---+       +--- n2 DNS
+#				 
+#				        
+#	BOTNET n0 ---+       +--- n2 DNS REAL
 #              |      |
 #             n4 -- n5 --- n6 SERVFAIL
-#             |      |
-#       n1 ---+      +--- n3 SINK
-#				|
-#				n7
+#             |      
+# REAL n1 ---+      
+#				
+#				
 #
 #
 # - All links are point-to-point with data rate 500kb/s and propagation delay 2ms
@@ -82,9 +82,9 @@ import ns.flow_monitor
 cmd = ns.core.CommandLine()
 
 # Default values
-cmd.latency = 1
-cmd.rate = 400000
-cmd.on_off_rate = 300000
+cmd.latency = 5
+cmd.rate = 300000
+cmd.interval = 0.01
 cmd.AddValue ("rate", "P2P data rate in bps")
 cmd.AddValue ("latency", "P2P link Latency in miliseconds")
 cmd.AddValue ("on_off_rate", "OnOffApplication data sending rate")
@@ -95,7 +95,7 @@ cmd.Parse(sys.argv)
 # CREATE NODES
 
 nodes = ns.network.NodeContainer()
-nodes.Create(9)
+nodes.Create(6)
 
 
 #######################################################################################
@@ -108,7 +108,7 @@ nodes.Create(9)
 # Set the default queue length to 5 packets (used by NetDevices)
 # The first line is for older ns3 versions and the second for new versions.
 #ns.core.Config.SetDefault("ns3::DropTailQueue::MaxPackets", ns.core.UintegerValue(5))
-#ns.core.Config.SetDefault("ns3::Queue::MaxPackets", ns.core.UintegerValue(10))
+#ns.core.Config.SetDefault("ns3::Queue::MaxPackets", ns.core.UintegerValue(5))
 
 
 # To connect the point-to-point channels, we need to define NodeContainers for all the
@@ -125,25 +125,15 @@ n2n5 = ns.network.NodeContainer()
 n2n5.Add(nodes.Get(2))
 n2n5.Add(nodes.Get(5))
 
-n3n5 = ns.network.NodeContainer()
-n3n5.Add(nodes.Get(3))
-n3n5.Add(nodes.Get(5))
-
 n4n5 = ns.network.NodeContainer()
 n4n5.Add(nodes.Get(4))
 n4n5.Add(nodes.Get(5))
 
-n6n5 = ns.network.NodeContainer()
-n6n5.Add(nodes.Get(6))
-n6n5.Add(nodes.Get(5))
+n3n5 = ns.network.NodeContainer()
+n3n5.Add(nodes.Get(3))
+n3n5.Add(nodes.Get(5))
 
-n7n1 = ns.network.NodeContainer()
-n7n1.Add(nodes.Get(7))
-n7n1.Add(nodes.Get(1))
 
-n8n0 = ns.network.NodeContainer()
-n8n0.Add(nodes.Get(8))
-n8n0.Add(nodes.Get(0))
 
 
 
@@ -154,6 +144,8 @@ pointToPoint.SetDeviceAttribute("DataRate",
                             ns.network.DataRateValue(ns.network.DataRate(int(cmd.rate))))
 pointToPoint.SetChannelAttribute("Delay",
                             ns.core.TimeValue(ns.core.MilliSeconds(int(cmd.latency))))
+
+pointToPoint.SetQueue("ns3::DropTailQueue", "MaxPackets", ns.core.StringValue("5"))
 
 #DNSp2p = pointToPoint
 
@@ -167,12 +159,9 @@ d1d4 = pointToPoint.Install(n1n4)
 d2d5 = pointToPoint.Install(n2n5)
 
 d4d5 = pointToPoint.Install(n4n5)
-d6d5 = pointToPoint.Install(n6n5)
-d7d1 = pointToPoint.Install(n7n1)
-d8d0 = pointToPoint.Install(n8n0)
-
-
 d3d5 = pointToPoint.Install(n3n5)
+
+
 
 # Here we can introduce an error model on the bottle-neck link (from node 4 to 5)
 #em = ns.network.RateErrorModel()
@@ -239,76 +228,46 @@ if1if4 = address.Assign(d1d4)
 address.SetBase(ns.network.Ipv4Address("10.1.3.0"), ns.network.Ipv4Mask("255.255.255.0"))
 if2if5 = address.Assign(d2d5)
 
-address.SetBase(ns.network.Ipv4Address("10.1.4.0"), ns.network.Ipv4Mask("255.255.255.0"))
-if3if5 = address.Assign(d3d5)
-
 address.SetBase(ns.network.Ipv4Address("10.1.5.0"), ns.network.Ipv4Mask("255.255.255.0"))
 if4if5 = address.Assign(d4d5)
 
-address.SetBase(ns.network.Ipv4Address("10.1.7.0"), ns.network.Ipv4Mask("255.255.255.0"))
-if6if5 = address.Assign(d6d5)
+address.SetBase(ns.network.Ipv4Address("10.1.4.0"), ns.network.Ipv4Mask("255.255.255.0"))
+if3if5 = address.Assign(d3d5)
 
-address.SetBase(ns.network.Ipv4Address("10.1.8.0"), ns.network.Ipv4Mask("255.255.255.0"))
-if7if1 = address.Assign(d7d1)
 
-address.SetBase(ns.network.Ipv4Address("10.1.9.0"), ns.network.Ipv4Mask("255.255.255.0"))
-if8if0 = address.Assign(d8d0)
 
 # Turn on global static routing so we can actually be routed across the network.
 ns.internet.Ipv4GlobalRoutingHelper.PopulateRoutingTables()
 
-def SetupUdpSink(dstNode):
-	# Create a TCP sink at dstNode
-  packet_sink_helper = ns.applications.PacketSinkHelper("ns3::UdpSocketFactory", 
-                          ns.network.InetSocketAddress(ns.network.Ipv4Address.GetAny(), 
-                                                       8080))
-#  packet_sink_helper.SetAttribute("MaxBytes", ns.core.UintegerValue(200))
-  sink_apps = packet_sink_helper.Install(dstNode)
-  sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(80.0)) 
 
+def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, INTERVAL, PACKET_SIZE, MAXPACKETS):
 
+	echoServer = ns.applications.UdpEchoServerHelper(9)
+	serverApps = echoServer.Install(dstNode)
 
-def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RATE, PACKET_SIZE):
+	serverApps.Start(ns.core.Seconds(startTime))
+	serverApps.Stop(ns.core.Seconds(stopTime))
 
-  # Create TCP connection from srcNode to dstNode 
-  on_off_udp_helper = ns.applications.OnOffHelper("ns3::UdpSocketFactory", 
-                          ns.network.Address(ns.network.InetSocketAddress(dstAddr, 8080)))
-  on_off_udp_helper.SetAttribute("DataRate",
-                      ns.network.DataRateValue(ns.network.DataRate(int(ON_OFF_RATE))))
-  on_off_udp_helper.SetAttribute("PacketSize", ns.core.UintegerValue(PACKET_SIZE)) 
-  on_off_udp_helper.SetAttribute("OnTime",
-                      ns.core.StringValue("ns3::ConstantRandomVariable[Constant=2]"))
-  on_off_udp_helper.SetAttribute("OffTime",
-                        ns.core.StringValue("ns3::ConstantRandomVariable[Constant=0]"))
-  #                      ns.core.StringValue("ns3::UniformRandomVariable[Min=1,Max=2]"))
-  #                      ns.core.StringValue("ns3::ExponentialRandomVariable[Mean=2]"))
+	echoClient = ns.applications.UdpEchoClientHelper(dstAddr, 9)
+	echoClient.SetAttribute("MaxPackets", ns.core.UintegerValue(MAXPACKETS))
+	echoClient.SetAttribute("Interval",
+                        ns.core.TimeValue(ns.core.Seconds (float(INTERVAL))))
+	echoClient.SetAttribute("PacketSize", ns.core.UintegerValue(PACKET_SIZE))
 
-  # Install the client on node srcNode
-  client_apps = on_off_udp_helper.Install(srcNode)
-  client_apps.Start(startTime)
-  client_apps.Stop(stopTime) 
+	
+	clientApps = echoClient.Install(srcNode)
+	#clientApps.Start(ns.core.Seconds(startTime))
+	#clientApps.Stop(ns.core.Seconds(stopTime))
 
-SetupUdpSink(nodes.Get(3))
-SetupUdpSink(nodes.Get(7))
-SetupUdpSink(nodes.Get(8))
 
 #SET UP BOTNET REQUEST CONNECTION
 SetupUdpConnection(nodes.Get(0), nodes.Get(3), if3if5.GetAddress(0),
-                   ns.core.Seconds(10.0), ns.core.Seconds(30.0), 100000, 26)
+                   ns.core.Seconds(0.0), ns.core.Seconds(10.0), 0.00001, 51, 100000)
 
-#SET UP SERVFAIL RESPONSE CONNECTION
-SetupUdpConnection(nodes.Get(6), nodes.Get(8), if8if0.GetAddress(0),
-                   ns.core.Seconds(10.0), ns.core.Seconds(30.0), 177000, 46)
 
 # SET UP NORMAL DNS REQUEST CONNECTION
-SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
-                   ns.core.Seconds(2.0), ns.core.Seconds(80.0), 10000, 26)
-
-#SET UP NORMAL RESPONSE CONNECTION
-SetupUdpConnection(nodes.Get(2), nodes.Get(7), if7if1.GetAddress(0),
-                   ns.core.Seconds(2.0), ns.core.Seconds(80.0), 200000, 512)
-
+SetupUdpConnection(nodes.Get(1), nodes.Get(2), if2if5.GetAddress(0),
+                   ns.core.Seconds(0.0), ns.core.Seconds(10.0), cmd.interval, 269, 10000)
 
 
 
@@ -325,9 +284,7 @@ SetupUdpConnection(nodes.Get(2), nodes.Get(7), if7if1.GetAddress(0),
 pointToPoint.EnablePcap("All-traffic", d4d5.Get(0), True)
 pointToPoint.EnablePcap("Botnet-traffic", d0d4.Get(0), True)
 pointToPoint.EnablePcap("Dns-ReqAndResp-traffic", d1d4.Get(0), True)
-pointToPoint.EnablePcap("Dns-Real-Resp-traffic", d7d1.Get(0), True)
-pointToPoint.EnablePcap("Dns-Botnet-Resp-traffic", d8d0.Get(0), True)
-pointToPoint.EnablePcap("Dns-sink-traffic", d3d5.Get(0), True)
+pointToPoint.EnablePcap("Dns-Req-traffic", d2d5.Get(0), True)
 
 
 #######################################################################################
@@ -347,7 +304,7 @@ monitor = flowmon_helper.InstallAll()
 #
 # We have to set stop time, otherwise the flowmonitor causes simulation to run forever
 
-ns.core.Simulator.Stop(ns.core.Seconds(80.0))
+ns.core.Simulator.Stop(ns.core.Seconds(180.0))
 ns.core.Simulator.Run()
 
 

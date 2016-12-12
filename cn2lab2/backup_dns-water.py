@@ -4,11 +4,16 @@
 #
 # Network topology
 #
-#       n0 ---+      +--- n2
+#				 n8 BOTNET SINK
+#				 |       
+#	BOTNET n0 ---+       +--- n2 DNS
+#              |      |
+#             n4 -- n5 --- n6 SERVFAIL
 #             |      |
-#             n4 -- n5
-#             |      |
-#       n1 ---+      +--- n3
+#       n1 ---+      +--- n3 SINK
+#				|
+#				n7
+#
 #
 # - All links are point-to-point with data rate 500kb/s and propagation delay 2ms
 #
@@ -77,9 +82,9 @@ import ns.flow_monitor
 cmd = ns.core.CommandLine()
 
 # Default values
-cmd.latency = 10
-cmd.rate = 2000000
-cmd.on_off_rate = 2000000
+cmd.latency = 5
+cmd.rate = 300000
+cmd.on_off_rate = 300000
 cmd.AddValue ("rate", "P2P data rate in bps")
 cmd.AddValue ("latency", "P2P link Latency in miliseconds")
 cmd.AddValue ("on_off_rate", "OnOffApplication data sending rate")
@@ -90,7 +95,7 @@ cmd.Parse(sys.argv)
 # CREATE NODES
 
 nodes = ns.network.NodeContainer()
-nodes.Create(6)
+nodes.Create(9)
 
 
 #######################################################################################
@@ -103,7 +108,7 @@ nodes.Create(6)
 # Set the default queue length to 5 packets (used by NetDevices)
 # The first line is for older ns3 versions and the second for new versions.
 #ns.core.Config.SetDefault("ns3::DropTailQueue::MaxPackets", ns.core.UintegerValue(5))
-#ns.core.Config.SetDefault("ns3::Queue::MaxPackets", ns.core.UintegerValue(5))
+ns.core.Config.SetDefault("ns3::Queue::MaxPackets", ns.core.UintegerValue(500))
 
 
 # To connect the point-to-point channels, we need to define NodeContainers for all the
@@ -128,6 +133,20 @@ n4n5 = ns.network.NodeContainer()
 n4n5.Add(nodes.Get(4))
 n4n5.Add(nodes.Get(5))
 
+n6n5 = ns.network.NodeContainer()
+n6n5.Add(nodes.Get(6))
+n6n5.Add(nodes.Get(5))
+
+n7n1 = ns.network.NodeContainer()
+n7n1.Add(nodes.Get(7))
+n7n1.Add(nodes.Get(1))
+
+n8n0 = ns.network.NodeContainer()
+n8n0.Add(nodes.Get(8))
+n8n0.Add(nodes.Get(0))
+
+
+
 # create point-to-point helper with common attributes
 pointToPoint = ns.point_to_point.PointToPointHelper()
 pointToPoint.SetDeviceAttribute("Mtu", ns.core.UintegerValue(1500))
@@ -136,21 +155,26 @@ pointToPoint.SetDeviceAttribute("DataRate",
 pointToPoint.SetChannelAttribute("Delay",
                             ns.core.TimeValue(ns.core.MilliSeconds(int(cmd.latency))))
 
-linkPoint = pointToPoint
+pointToPoint.SetQueue("ns3::DropTailQueue", "MaxPackets", ns.core.StringValue("5"))
 
-linkPoint.SetQueue("ns3::DropTailQueue", "MaxPackets", ns.core.StringValue("10"))
-linkPoint.SetDeviceAttribute("DataRate",
-                            ns.network.DataRateValue(ns.network.DataRate(int(1000000))))
-linkPoint.SetChannelAttribute("Delay",
-                            ns.core.TimeValue(ns.core.MilliSeconds(int(20))))
+#DNSp2p = pointToPoint
+
+#DNSp2p.SetChannelAttribute("Delay",
+#                           ns.core.TimeValue(ns.core.MilliSeconds(int(10))))
+#DNSp2p.SetQueue("ns3::DropTailQueue", "MaxPackets", ns.core.StringValue("50"))
 
 # install network devices for all nodes based on point-to-point links
 d0d4 = pointToPoint.Install(n0n4)
 d1d4 = pointToPoint.Install(n1n4)
 d2d5 = pointToPoint.Install(n2n5)
-d3d5 = pointToPoint.Install(n3n5)
 
-d4d5 = linkPoint.Install(n4n5)
+d4d5 = pointToPoint.Install(n4n5)
+d6d5 = pointToPoint.Install(n6n5)
+d7d1 = pointToPoint.Install(n7n1)
+d8d0 = pointToPoint.Install(n8n0)
+
+
+d3d5 = pointToPoint.Install(n3n5)
 
 # Here we can introduce an error model on the bottle-neck link (from node 4 to 5)
 #em = ns.network.RateErrorModel()
@@ -165,18 +189,17 @@ d4d5 = linkPoint.Install(n4n5)
 # Choose a TCP version and set some attributes.
 
 # Set a TCP segment size (this should be inline with the channel MTU)
-ns.core.Config.SetDefault("ns3::TcpSocket::SegmentSize", ns.core.UintegerValue(1448))
+#ns.core.Config.SetDefault("ns3::TcpSocket::SegmentSize", ns.core.UintegerValue(1448))
 
 # If you want, you may set a default TCP version here. It will affect all TCP
 # connections created in the simulator. If you want to simulate different TCP versions
 # at the same time, see below for how to do that.
 #ns.core.Config.SetDefault("ns3::TcpL4Protocol::SocketType",
-#                         ns.core.StringValue("ns3::TcpNewReno"))
-#                           ns.core.StringValue("ns3::TcpVegas"))
-#                         ns.core.StringValue("ns3::TcpVeno"))
+#                          ns.core.StringValue("ns3::TcpNewReno"))
+#                          ns.core.StringValue("ns3::TcpVegas"))
+#                          ns.core.StringValue("ns3::TcpVeno"))
 #                          ns.core.StringValue("ns3::TcpWestwood"))
-#														ns.core.StringValue("ns3::TcpTahoe"))
-			
+
 # Some examples of attributes for some of the TCP versions.
 #ns.core.Config.SetDefault("ns3::TcpWestwood::ProtocolType",
 #                          ns.core.StringValue("WestwoodPlus"))
@@ -205,8 +228,6 @@ stack.Install(nodes)
 #ns.core.Config.Set("/NodeList/1/$ns3::TcpL4Protocol/SocketType",
 #                   ns.core.TypeIdValue(ns.core.TypeId.LookupByName ("ns3::TcpWestwood")))
 
-ns.core.Config.Set("/NodeList/0/$ns3::TcpL4Protocol/SocketType",
-                   ns.core.TypeIdValue(ns.core.TypeId.LookupByName ("ns3::TcpHighSpeed")))
 
 # Assign IP addresses for net devices
 address = ns.internet.Ipv4AddressHelper()
@@ -226,70 +247,38 @@ if3if5 = address.Assign(d3d5)
 address.SetBase(ns.network.Ipv4Address("10.1.5.0"), ns.network.Ipv4Mask("255.255.255.0"))
 if4if5 = address.Assign(d4d5)
 
+address.SetBase(ns.network.Ipv4Address("10.1.7.0"), ns.network.Ipv4Mask("255.255.255.0"))
+if6if5 = address.Assign(d6d5)
+
+address.SetBase(ns.network.Ipv4Address("10.1.8.0"), ns.network.Ipv4Mask("255.255.255.0"))
+if7if1 = address.Assign(d7d1)
+
+address.SetBase(ns.network.Ipv4Address("10.1.9.0"), ns.network.Ipv4Mask("255.255.255.0"))
+if8if0 = address.Assign(d8d0)
+
 # Turn on global static routing so we can actually be routed across the network.
 ns.internet.Ipv4GlobalRoutingHelper.PopulateRoutingTables()
-
-def SetupTcpSink(dstNode):
-	# Create a TCP sink at dstNode
-  packet_sink_helper = ns.applications.PacketSinkHelper("ns3::TcpSocketFactory", 
-                          ns.network.InetSocketAddress(ns.network.Ipv4Address.GetAny(), 
-                                                       8080))
-  sink_apps = packet_sink_helper.Install(dstNode)
-  sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(180.0)) 
 
 def SetupUdpSink(dstNode):
 	# Create a TCP sink at dstNode
   packet_sink_helper = ns.applications.PacketSinkHelper("ns3::UdpSocketFactory", 
                           ns.network.InetSocketAddress(ns.network.Ipv4Address.GetAny(), 
                                                        8080))
+#  packet_sink_helper.SetAttribute("MaxBytes", ns.core.UintegerValue(200))
   sink_apps = packet_sink_helper.Install(dstNode)
-  sink_apps.Start(ns.core.Seconds(2.0))
+  sink_apps.Start(ns.core.Seconds(0.0))
   sink_apps.Stop(ns.core.Seconds(180.0)) 
 
-#######################################################################################
-# CREATE TCP APPLICATION AND CONNECTION
-#
-# Create a TCP client at node N0 and a TCP sink at node N2 using an On-Off application.
-# An On-Off application alternates between on and off modes. In on mode, packets are
-# generated according to DataRate, PacketSize. In off mode, no packets are transmitted.
-def SetupTcpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RATE):
 
 
-  # Create TCP connection from srcNode to dstNode 
-  on_off_tcp_helper = ns.applications.OnOffHelper("ns3::TcpSocketFactory", 
-                          ns.network.Address(ns.network.InetSocketAddress(dstAddr, 8080)))
-  on_off_tcp_helper.SetAttribute("DataRate",
-                      ns.network.DataRateValue(ns.network.DataRate(int(ON_OFF_RATE))))
-  on_off_tcp_helper.SetAttribute("PacketSize", ns.core.UintegerValue(1100)) 
-  on_off_tcp_helper.SetAttribute("OnTime",
-                      ns.core.StringValue("ns3::ConstantRandomVariable[Constant=2]"))
-  on_off_tcp_helper.SetAttribute("OffTime",
-                        ns.core.StringValue("ns3::ConstantRandomVariable[Constant=0]"))
-  #                      ns.core.StringValue("ns3::UniformRandomVariable[Min=1,Max=2]"))
-  #                      ns.core.StringValue("ns3::ExponentialRandomVariable[Mean=2]"))
-
-  # Install the client on node srcNode
-  client_apps = on_off_tcp_helper.Install(srcNode)
-  client_apps.Start(startTime)
-  client_apps.Stop(stopTime) 
-
-
-def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RATE):
-  # Create a Udp sink at dstNode
-  packet_sink_helper = ns.applications.PacketSinkHelper("ns3::UdpSocketFactory", 
-                          ns.network.InetSocketAddress(ns.network.Ipv4Address.GetAny(), 
-                                                       8080))
-  sink_apps = packet_sink_helper.Install(dstNode)
-  sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(180.0)) 
+def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RATE, PACKET_SIZE):
 
   # Create TCP connection from srcNode to dstNode 
   on_off_udp_helper = ns.applications.OnOffHelper("ns3::UdpSocketFactory", 
                           ns.network.Address(ns.network.InetSocketAddress(dstAddr, 8080)))
   on_off_udp_helper.SetAttribute("DataRate",
                       ns.network.DataRateValue(ns.network.DataRate(int(ON_OFF_RATE))))
-  on_off_udp_helper.SetAttribute("PacketSize", ns.core.UintegerValue(1470)) 
+  on_off_udp_helper.SetAttribute("PacketSize", ns.core.UintegerValue(PACKET_SIZE)) 
   on_off_udp_helper.SetAttribute("OnTime",
                       ns.core.StringValue("ns3::ConstantRandomVariable[Constant=2]"))
   on_off_udp_helper.SetAttribute("OffTime",
@@ -302,15 +291,27 @@ def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RA
   client_apps.Start(startTime)
   client_apps.Stop(stopTime) 
 
-SetupTcpSink(nodes.Get(2))
 SetupUdpSink(nodes.Get(3))
-SetupTcpConnection(nodes.Get(0), nodes.Get(2), if2if5.GetAddress(0),
-                   ns.core.Seconds(2.0), ns.core.Seconds(180.0), 2000000)
-SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
-                   ns.core.Seconds(19.5), ns.core.Seconds(58.5), 2000000)
+SetupUdpSink(nodes.Get(7))
+SetupUdpSink(nodes.Get(8))
 
-#SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
-#                   ns.core.Seconds(10.0), ns.core.Seconds(20.0))
+#SET UP BOTNET REQUEST CONNECTION
+SetupUdpConnection(nodes.Get(0), nodes.Get(3), if3if5.GetAddress(0),
+                   ns.core.Seconds(10.0), ns.core.Seconds(120.0), 100000, 26)
+
+#SET UP SERVFAIL RESPONSE CONNECTION
+SetupUdpConnection(nodes.Get(6), nodes.Get(8), if8if0.GetAddress(0),
+                   ns.core.Seconds(10.0), ns.core.Seconds(120.0), 177000, 46)
+
+# SET UP NORMAL DNS REQUEST CONNECTION
+SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
+                   ns.core.Seconds(0.0), ns.core.Seconds(180.0), 100000, 26)
+
+#SET UP NORMAL RESPONSE CONNECTION
+SetupUdpConnection(nodes.Get(2), nodes.Get(7), if7if1.GetAddress(0),
+                   ns.core.Seconds(0.0), ns.core.Seconds(180.0), 200000, 512)
+
+
 
 
 #######################################################################################
@@ -323,13 +324,13 @@ SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
 #
 # You will get two files, one for node 0 and one for node 1
 
-linkPoint.EnablePcap("all-traffic", d4d5.Get(0), True)
-pointToPoint.EnablePcap("tcp-1-traffic", d0d4.Get(0), True)
-pointToPoint.EnablePcap("tcp-2-traffic", d2d5.Get(0), True)
-
-pointToPoint.EnablePcap("udp-1-traffic", d1d4.Get(0), True)
-pointToPoint.EnablePcap("udp-2-traffic", d3d5.Get(0), True)
-
+pointToPoint.EnablePcap("All-traffic", d4d5.Get(0), True)
+pointToPoint.EnablePcap("Botnet-traffic", d0d4.Get(0), True)
+pointToPoint.EnablePcap("Dns-ReqAndResp-traffic", d1d4.Get(0), True)
+pointToPoint.EnablePcap("Dns-Real-Resp-traffic", d7d1.Get(0), True)
+pointToPoint.EnablePcap("Dns-Botnet-Resp-traffic", d8d0.Get(0), True)
+pointToPoint.EnablePcap("Dns-sink-traffic", d3d5.Get(0), True)
+pointToPoint.EnablePcap("Dns-Req-traffic", d2d5.Get(0), True)
 
 
 #######################################################################################
