@@ -49,7 +49,7 @@ import ns.flow_monitor
 #ns.core.LogComponentEnable("PointToPointNetDevice", ns.core.LOG_LEVEL_ALL)
 #ns.core.LogComponentEnable("DropTailQueue", ns.core.LOG_LEVEL_LOGIC)
 #ns.core.LogComponentEnable("OnOffApplication", ns.core.LOG_LEVEL_INFO)
-#ns.core.LogComponentEnable("TcpWestwood", ns.core.LOG_LEVEL_LOGIC)
+ns.core.LogComponentEnable("TcpVeno", ns.core.LOG_LEVEL_LOGIC)
 #ns.core.LogComponentEnable("TcpNewReno", ns.core.LOG_LEVEL_LOGIC) # works only in older ns3 versions
 
 #ns.core.LogComponentEnable("TcpCongestionOps", ns.core.LOG_LEVEL_INFO)
@@ -85,7 +85,8 @@ cmd.AddValue ("latency", "P2P link Latency in miliseconds")
 cmd.AddValue ("on_off_rate", "OnOffApplication data sending rate")
 cmd.Parse(sys.argv)
 
-
+ns.core.Config.SetDefault("ns3::TcpL4Protocol::SocketType",
+														ns.core.StringValue("ns3::TcpWestwood"))
 #######################################################################################
 # CREATE NODES
 
@@ -170,11 +171,11 @@ ns.core.Config.SetDefault("ns3::TcpSocket::SegmentSize", ns.core.UintegerValue(1
 # If you want, you may set a default TCP version here. It will affect all TCP
 # connections created in the simulator. If you want to simulate different TCP versions
 # at the same time, see below for how to do that.
-#ns.core.Config.SetDefault("ns3::TcpL4Protocol::SocketType",
-#                         ns.core.StringValue("ns3::TcpNewReno"))
+ns.core.Config.SetDefault("ns3::TcpL4Protocol::SocketType",
+														ns.core.StringValue("ns3::TcpVeno"))
 #                           ns.core.StringValue("ns3::TcpVegas"))
-#                         ns.core.StringValue("ns3::TcpVeno"))
-#                          ns.core.StringValue("ns3::TcpWestwood"))
+#                         ns.core.StringValue("ns3::TcpVeno"))	
+#	                          ns.core.StringValue("ns3::TcpWestwood"))
 #														ns.core.StringValue("ns3::TcpTahoe"))
 			
 # Some examples of attributes for some of the TCP versions.
@@ -205,8 +206,8 @@ stack.Install(nodes)
 #ns.core.Config.Set("/NodeList/1/$ns3::TcpL4Protocol/SocketType",
 #                   ns.core.TypeIdValue(ns.core.TypeId.LookupByName ("ns3::TcpWestwood")))
 
-ns.core.Config.Set("/NodeList/0/$ns3::TcpL4Protocol/SocketType",
-                   ns.core.TypeIdValue(ns.core.TypeId.LookupByName ("ns3::TcpHighSpeed")))
+#ns.core.Config.Set("/NodeList/0/$ns3::TcpL4Protocol/SocketType",
+ #                  ns.core.TypeIdValue(ns.core.TypeId.LookupByName ("ns3::TcpHighSpeed")))
 
 # Assign IP addresses for net devices
 address = ns.internet.Ipv4AddressHelper()
@@ -236,7 +237,7 @@ def SetupTcpSink(dstNode):
                                                        8080))
   sink_apps = packet_sink_helper.Install(dstNode)
   sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(180.0)) 
+  sink_apps.Stop(ns.core.Seconds(100.0)) 
 
 def SetupUdpSink(dstNode):
 	# Create a TCP sink at dstNode
@@ -245,7 +246,7 @@ def SetupUdpSink(dstNode):
                                                        8080))
   sink_apps = packet_sink_helper.Install(dstNode)
   sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(180.0)) 
+  sink_apps.Stop(ns.core.Seconds(100.0)) 
 
 #######################################################################################
 # CREATE TCP APPLICATION AND CONNECTION
@@ -282,14 +283,14 @@ def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RA
                                                        8080))
   sink_apps = packet_sink_helper.Install(dstNode)
   sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(180.0)) 
+  sink_apps.Stop(ns.core.Seconds(100.0)) 
 
   # Create TCP connection from srcNode to dstNode 
   on_off_udp_helper = ns.applications.OnOffHelper("ns3::UdpSocketFactory", 
                           ns.network.Address(ns.network.InetSocketAddress(dstAddr, 8080)))
   on_off_udp_helper.SetAttribute("DataRate",
                       ns.network.DataRateValue(ns.network.DataRate(int(ON_OFF_RATE))))
-  on_off_udp_helper.SetAttribute("PacketSize", ns.core.UintegerValue(1470)) 
+  on_off_udp_helper.SetAttribute("PacketSize", ns.core.UintegerValue(512)) 
   on_off_udp_helper.SetAttribute("OnTime",
                       ns.core.StringValue("ns3::ConstantRandomVariable[Constant=2]"))
   on_off_udp_helper.SetAttribute("OffTime",
@@ -305,9 +306,9 @@ def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RA
 SetupTcpSink(nodes.Get(2))
 SetupUdpSink(nodes.Get(3))
 SetupTcpConnection(nodes.Get(0), nodes.Get(2), if2if5.GetAddress(0),
-                   ns.core.Seconds(2.0), ns.core.Seconds(180.0), 2000000)
+                   ns.core.Seconds(2.0), ns.core.Seconds(100.0), 2000000)
 SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
-                   ns.core.Seconds(19.5), ns.core.Seconds(58.5), 2000000)
+                   ns.core.Seconds(20), ns.core.Seconds(60), 2000000)
 
 #SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
 #                   ns.core.Seconds(10.0), ns.core.Seconds(20.0))
@@ -349,7 +350,7 @@ monitor = flowmon_helper.InstallAll()
 #
 # We have to set stop time, otherwise the flowmonitor causes simulation to run forever
 
-ns.core.Simulator.Stop(ns.core.Seconds(180.0))
+ns.core.Simulator.Stop(ns.core.Seconds(100.0))
 ns.core.Simulator.Run()
 
 
