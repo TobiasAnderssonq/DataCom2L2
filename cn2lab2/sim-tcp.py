@@ -49,8 +49,8 @@ import ns.flow_monitor
 #ns.core.LogComponentEnable("PointToPointNetDevice", ns.core.LOG_LEVEL_ALL)
 #ns.core.LogComponentEnable("DropTailQueue", ns.core.LOG_LEVEL_LOGIC)
 #ns.core.LogComponentEnable("OnOffApplication", ns.core.LOG_LEVEL_INFO)
-ns.core.LogComponentEnable("TcpVeno", ns.core.LOG_LEVEL_LOGIC)
-#ns.core.LogComponentEnable("TcpNewReno", ns.core.LOG_LEVEL_LOGIC) # works only in older ns3 versions
+#ns.core.LogComponentEnable("WestwoodPlus", ns.core.LOG_LEVEL_LOGIC)
+#ns.core.LogComponentEnable("TcpVeno", ns.core.LOG_LEVEL_LOGIC) # works only in older ns3 versions
 
 #ns.core.LogComponentEnable("TcpCongestionOps", ns.core.LOG_LEVEL_INFO)
 
@@ -86,7 +86,7 @@ cmd.AddValue ("on_off_rate", "OnOffApplication data sending rate")
 cmd.Parse(sys.argv)
 
 ns.core.Config.SetDefault("ns3::TcpL4Protocol::SocketType",
-														ns.core.StringValue("ns3::TcpWestwood"))
+														ns.core.StringValue("ns3::TcpIllinois"))
 #######################################################################################
 # CREATE NODES
 
@@ -143,7 +143,7 @@ linkPoint.SetQueue("ns3::DropTailQueue", "MaxPackets", ns.core.StringValue("10")
 linkPoint.SetDeviceAttribute("DataRate",
                             ns.network.DataRateValue(ns.network.DataRate(int(1000000))))
 linkPoint.SetChannelAttribute("Delay",
-                            ns.core.TimeValue(ns.core.MilliSeconds(int(20))))
+                            ns.core.TimeValue(ns.core.MilliSeconds(int(2))))
 
 # install network devices for all nodes based on point-to-point links
 d0d4 = pointToPoint.Install(n0n4)
@@ -154,10 +154,10 @@ d3d5 = pointToPoint.Install(n3n5)
 d4d5 = linkPoint.Install(n4n5)
 
 # Here we can introduce an error model on the bottle-neck link (from node 4 to 5)
-#em = ns.network.RateErrorModel()
-#em.SetAttribute("ErrorUnit", ns.core.StringValue("ERROR_UNIT_PACKET"))
-#em.SetAttribute("ErrorRate", ns.core.DoubleValue(0.02))
-#d4d5.Get(1).SetReceiveErrorModel(em)
+em = ns.network.RateErrorModel()
+em.SetAttribute("ErrorUnit", ns.core.StringValue("ERROR_UNIT_PACKET"))
+em.SetAttribute("ErrorRate", ns.core.DoubleValue(0.02))
+d4d5.Get(1).SetReceiveErrorModel(em)
 
 
 #######################################################################################
@@ -171,8 +171,8 @@ ns.core.Config.SetDefault("ns3::TcpSocket::SegmentSize", ns.core.UintegerValue(1
 # If you want, you may set a default TCP version here. It will affect all TCP
 # connections created in the simulator. If you want to simulate different TCP versions
 # at the same time, see below for how to do that.
-ns.core.Config.SetDefault("ns3::TcpL4Protocol::SocketType",
-														ns.core.StringValue("ns3::TcpVeno"))
+#ns.core.Config.SetDefault("ns3::TcpL4Protocol::SocketType",
+#														ns.core.StringValue("ns3::WestwoodPlus"))
 #                           ns.core.StringValue("ns3::TcpVegas"))
 #                         ns.core.StringValue("ns3::TcpVeno"))	
 #	                          ns.core.StringValue("ns3::TcpWestwood"))
@@ -237,7 +237,7 @@ def SetupTcpSink(dstNode):
                                                        8080))
   sink_apps = packet_sink_helper.Install(dstNode)
   sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(100.0)) 
+  sink_apps.Stop(ns.core.Seconds(180.0)) 
 
 def SetupUdpSink(dstNode):
 	# Create a TCP sink at dstNode
@@ -246,7 +246,7 @@ def SetupUdpSink(dstNode):
                                                        8080))
   sink_apps = packet_sink_helper.Install(dstNode)
   sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(100.0)) 
+  sink_apps.Stop(ns.core.Seconds(180.0)) 
 
 #######################################################################################
 # CREATE TCP APPLICATION AND CONNECTION
@@ -283,7 +283,7 @@ def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RA
                                                        8080))
   sink_apps = packet_sink_helper.Install(dstNode)
   sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(100.0)) 
+  sink_apps.Stop(ns.core.Seconds(180.0)) 
 
   # Create TCP connection from srcNode to dstNode 
   on_off_udp_helper = ns.applications.OnOffHelper("ns3::UdpSocketFactory", 
@@ -306,7 +306,7 @@ def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RA
 SetupTcpSink(nodes.Get(2))
 SetupUdpSink(nodes.Get(3))
 SetupTcpConnection(nodes.Get(0), nodes.Get(2), if2if5.GetAddress(0),
-                   ns.core.Seconds(2.0), ns.core.Seconds(100.0), 2000000)
+                   ns.core.Seconds(2.0), ns.core.Seconds(180.0), 2000000)
 SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
                    ns.core.Seconds(20), ns.core.Seconds(60), 2000000)
 
@@ -350,7 +350,7 @@ monitor = flowmon_helper.InstallAll()
 #
 # We have to set stop time, otherwise the flowmonitor causes simulation to run forever
 
-ns.core.Simulator.Stop(ns.core.Seconds(100.0))
+ns.core.Simulator.Stop(ns.core.Seconds(180.0))
 ns.core.Simulator.Run()
 
 
