@@ -342,7 +342,7 @@ SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
 linkPoint.EnablePcap("all-traffic", d4d5.Get(0), True)
 pointToPoint.EnablePcap("tcp-0-traffic", d0d4.Get(0), True)
 pointToPoint.EnablePcap("tcp-2-traffic", d2d5.Get(0), True)
-pointToPoint.EnablePcap("tcp-3-traffic", d7d5.Get(0), True)
+pointToPoint.EnablePcap("tcp-7-traffic", d7d5.Get(0), True)
 
 
 pointToPoint.EnablePcap("udp-1-traffic", d1d4.Get(0), True)
