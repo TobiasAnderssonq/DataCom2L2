@@ -6,7 +6,7 @@
 #
 #       n0 ---+      +--- n2
 #             |      |
-#       n6 ---n4 -- n5--- n7
+#       			n4 -- n5
 #             |      |
 #       n1 ---+      +--- n3
 #
@@ -91,7 +91,7 @@ ns.core.Config.SetDefault("ns3::TcpL4Protocol::SocketType",
 # CREATE NODES
 
 nodes = ns.network.NodeContainer()
-nodes.Create(8)
+nodes.Create(6)
 
 
 #######################################################################################
@@ -117,10 +117,6 @@ n1n4 = ns.network.NodeContainer()
 n1n4.Add(nodes.Get(1))
 n1n4.Add(nodes.Get(4))
 
-n6n4 = ns.network.NodeContainer()
-n6n4.Add(nodes.Get(6))
-n6n4.Add(nodes.Get(4))
-
 n2n5 = ns.network.NodeContainer()
 n2n5.Add(nodes.Get(2))
 n2n5.Add(nodes.Get(5))
@@ -129,9 +125,6 @@ n3n5 = ns.network.NodeContainer()
 n3n5.Add(nodes.Get(3))
 n3n5.Add(nodes.Get(5))
 
-n7n5 = ns.network.NodeContainer()
-n7n5.Add(nodes.Get(7))
-n7n5.Add(nodes.Get(5))
 
 n4n5 = ns.network.NodeContainer()
 n4n5.Add(nodes.Get(4))
@@ -149,18 +142,16 @@ linkPoint = pointToPoint
 
 linkPoint.SetQueue("ns3::DropTailQueue", "MaxPackets", ns.core.StringValue("10"))
 linkPoint.SetDeviceAttribute("DataRate",
-                            ns.network.DataRateValue(ns.network.DataRate(int(1000000))))
+                            ns.network.DataRateValue(ns.network.DataRate(int(8000000))))
 linkPoint.SetChannelAttribute("Delay",
                             ns.core.TimeValue(ns.core.MilliSeconds(int(2))))
 
 # install network devices for all nodes based on point-to-point links
 d0d4 = pointToPoint.Install(n0n4)
 d1d4 = pointToPoint.Install(n1n4)
-d6d4 = pointToPoint.Install(n6n4)
 
 d2d5 = pointToPoint.Install(n2n5)
 d3d5 = pointToPoint.Install(n3n5)
-d7d5 = pointToPoint.Install(n7n5)
 
 d4d5 = linkPoint.Install(n4n5)
 
@@ -229,17 +220,11 @@ if0if4 = address.Assign(d0d4)
 address.SetBase(ns.network.Ipv4Address("10.1.2.0"), ns.network.Ipv4Mask("255.255.255.0"))
 if1if4 = address.Assign(d1d4)
 
-address.SetBase(ns.network.Ipv4Address("10.1.7.0"), ns.network.Ipv4Mask("255.255.255.0"))
-if6if4 = address.Assign(d6d4)
-
 address.SetBase(ns.network.Ipv4Address("10.1.3.0"), ns.network.Ipv4Mask("255.255.255.0"))
 if2if5 = address.Assign(d2d5)
 
 address.SetBase(ns.network.Ipv4Address("10.1.4.0"), ns.network.Ipv4Mask("255.255.255.0"))
 if3if5 = address.Assign(d3d5)
-
-address.SetBase(ns.network.Ipv4Address("10.1.8.0"), ns.network.Ipv4Mask("255.255.255.0"))
-if7if5 = address.Assign(d7d5)
 
 address.SetBase(ns.network.Ipv4Address("10.1.5.0"), ns.network.Ipv4Mask("255.255.255.0"))
 if4if5 = address.Assign(d4d5)
@@ -254,7 +239,7 @@ def SetupTcpSink(dstNode):
                                                        8080))
   sink_apps = packet_sink_helper.Install(dstNode)
   sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(180.0)) 
+  sink_apps.Stop(ns.core.Seconds(60.0)) 
 
 def SetupUdpSink(dstNode):
 	# Create a TCP sink at dstNode
@@ -263,7 +248,7 @@ def SetupUdpSink(dstNode):
                                                        8080))
   sink_apps = packet_sink_helper.Install(dstNode)
   sink_apps.Start(ns.core.Seconds(2.0))
-  sink_apps.Stop(ns.core.Seconds(180.0)) 
+  sink_apps.Stop(ns.core.Seconds(60.0)) 
 
 #######################################################################################
 # CREATE TCP APPLICATION AND CONNECTION
@@ -314,16 +299,13 @@ def SetupUdpConnection(srcNode, dstNode, dstAddr, startTime, stopTime, ON_OFF_RA
   client_apps.Start(startTime)
   client_apps.Stop(stopTime) 
 
-SetupTcpSink(nodes.Get(7))
 SetupTcpSink(nodes.Get(2))
 SetupUdpSink(nodes.Get(3))
 
 SetupTcpConnection(nodes.Get(0), nodes.Get(2), if2if5.GetAddress(0),
-                   ns.core.Seconds(2.0), ns.core.Seconds(180.0), 2000000)
-SetupTcpConnection(nodes.Get(6), nodes.Get(7), if7if5.GetAddress(0),
-                   ns.core.Seconds(30.0), ns.core.Seconds(150.0), 2000000)
+                   ns.core.Seconds(2.0), ns.core.Seconds(60.0), 2000000)
 SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
-                   ns.core.Seconds(60.0), ns.core.Seconds(120.0), 2000000)
+                   ns.core.Seconds(10.0), ns.core.Seconds(50.0), 8000000)
 
 #SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
 #                   ns.core.Seconds(10.0), ns.core.Seconds(20.0))
@@ -342,7 +324,6 @@ SetupUdpConnection(nodes.Get(1), nodes.Get(3), if3if5.GetAddress(0),
 linkPoint.EnablePcap("all-traffic", d4d5.Get(0), True)
 pointToPoint.EnablePcap("tcp-0-traffic", d0d4.Get(0), True)
 pointToPoint.EnablePcap("tcp-2-traffic", d2d5.Get(0), True)
-pointToPoint.EnablePcap("tcp-7-traffic", d7d5.Get(0), True)
 
 
 pointToPoint.EnablePcap("udp-1-traffic", d1d4.Get(0), True)
@@ -367,11 +348,11 @@ monitor = flowmon_helper.InstallAll()
 #
 # We have to set stop time, otherwise the flowmonitor causes simulation to run forever
 
-ns.core.Simulator.Stop(ns.core.Seconds(180.0))
+ns.core.Simulator.Stop(ns.core.Seconds(60.0))
 ns.core.Simulator.Run()
 
 
-#######################################################################################
+#######################################################################################	
 # FLOW MONITOR ANALYSIS
 #
 # Simulation is finished. Let's extract the useful information from the FlowMonitor and
